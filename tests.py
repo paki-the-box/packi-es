@@ -21,8 +21,8 @@ class BoxSystemTests(TestCase):
         users = runner.processes['users']
         shippings = runner.processes['shippings']
 
-        julian: User = users.create_user("Julian")
-        niklas: User = users.create_user("Niklas")
+        julian: User = users.create_user("Julian", "a@b.c")
+        niklas: User = users.create_user("Niklas", "b@c.d")
 
         julian.__save__()
         niklas.__save__()

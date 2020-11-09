@@ -7,9 +7,10 @@ from eventsourcing.system.definition import System
 
 class User(AggregateRoot):
 
-    def __init__(self, name, **kwargs):
+    def __init__(self, name, email, **kwargs):
         super(User, self).__init__(**kwargs)
         self.name = name
+        self.email = email
         self.shippings = []
 
     class Event(AggregateRoot.Event):
@@ -61,13 +62,14 @@ class User(AggregateRoot):
         def mutate(self, obj):
             obj.shippings.append(self.shipping_id)
 
-    def track_shipping_received(self, shipping_id, sender):
-        self.__trigger_event__(
-            self.ShippingOffered,
-            shipping_id=shipping_id,
-            sender=sender,
-            receiver=self.id
-        )
+    def track_shipping(self, shipping_id, sender, receiver):
+        if not self.shippings.__contains__(shipping_id):
+            self.__trigger_event__(
+                self.ShippingOffered,
+                shipping_id=shipping_id,
+                sender=sender,
+                receiver=receiver
+            )
 
     def __str__(self):
         return f'{self.name} - {self.shippings}'
@@ -94,8 +96,8 @@ class Users(ProcessApplication):
     persist_event_type = User.Event
 
     @staticmethod
-    def create_user(name):
-        return User.__create__(name=name)
+    def create_user(name, email):
+        return User.__create__(name=name, email=email)
 
     def get_user(self, user_id):
         user = self.repository[user_id]
@@ -107,10 +109,19 @@ class Users(ProcessApplication):
         if isinstance(event, User.ShippingStarted):
             receiver = repository[event.receiver]
             assert isinstance(receiver, User)
-            receiver.track_shipping_received(
+            receiver.track_shipping(
                 shipping_id=event.shipping_id,
                 sender=event.sender,
+                receiver=event.receiver
             )
+        elif isinstance(event, Shipping.Created):
+            sender: User = repository[event.sender]
+            receiver: User = repository[event.receiver]
+            receiver.track_shipping(shipping_id=event.originator_id,
+                                    sender=sender.id, receiver=receiver.id)
+            sender.track_shipping(shipping_id=event.originator_id,
+                                  sender=sender.id, receiver=receiver.id)
+            print(receiver)
 
 
 class Shippings(ProcessApplication):
@@ -119,7 +130,8 @@ class Shippings(ProcessApplication):
     @staticmethod
     def policy(repository, event):
         if isinstance(event, User.ShippingStarted):
-            shipping = Shipping.__create__(originator_id=event.shipping_id, sender=event.sender, receiver=event.receiver)
+            shipping = Shipping.__create__(originator_id=event.shipping_id, sender=event.sender,
+                                           receiver=event.receiver)
             return shipping
 
 
