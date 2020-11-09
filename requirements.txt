@@ -1,0 +1,3 @@
+eventsourcing[sqlalchemy]==8.2.0
+behave
+pyhamcrest
