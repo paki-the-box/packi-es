@@ -1,7 +1,9 @@
+from typing import Optional
 from uuid import UUID, uuid4
 
 from eventsourcing.application.process import ProcessApplication
 from eventsourcing.domain.model.aggregate import AggregateRoot
+from eventsourcing.domain.model.entity import TEntityWithHashchain
 from eventsourcing.system.definition import System
 
 
@@ -92,6 +94,51 @@ class Shipping(AggregateRoot):
         return f'{self.sender} -> {self.receiver}'
 
 
+class Negotiation(AggregateRoot):
+
+    def __init__(self, author, box, date, **kwargs):
+        super(Negotiation, self).__init__(**kwargs)
+        self.author = author
+        self.box = box
+        self.date = date
+        self.status = ""
+
+    class Event(AggregateRoot.Event):
+        pass
+
+    class Created(Event, AggregateRoot.Created):
+        pass
+
+    class OfferCreated(Event):
+
+        def mutate(self, obj):
+            obj.status = "created"
+
+    class OfferAccepted(Event):
+        pass
+
+    class OfferRejected(Event):
+        pass
+
+    def create_offer(self):
+        self.__trigger_event__(
+            Negotiation.OfferCreated
+        )
+
+    def accept_offer(self):
+        self.__trigger_event__(
+            Negotiation.OfferAccepted
+        )
+
+    def reject_offer(self):
+        self.__trigger_event__(
+            Negotiation.OfferRejected
+        )
+
+    def __str__(self):
+        return f'{self.author} -> {self.box} ({self.status}, {self.id})'
+
+
 class Users(ProcessApplication):
     persist_event_type = User.Event
 
@@ -135,9 +182,22 @@ class Shippings(ProcessApplication):
             return shipping
 
 
+class Negotiations(ProcessApplication):
+    persist_event_type = Negotiation.Event
+
+    @staticmethod
+    def create_negotiation(author, box, date):
+        return Negotiation.__create__(author=author, box=box, date=date)
+
+    def get_negotiation(self, negotiation_id):
+        negotiation = self.repository[negotiation_id]
+        assert isinstance(negotiation, Negotiation)
+        return negotiation
+
+
 class BoxSystem(System):
     def __init__(self, **kwargs):
         super(BoxSystem, self).__init__(
-            Users | Shippings | Users | Users,
+            Users | Shippings | Users | Users | Negotiations,
             **kwargs
         )

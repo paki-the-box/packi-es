@@ -3,10 +3,36 @@ from unittest import TestCase
 from eventsourcing.application.sqlalchemy import SQLAlchemyApplication
 from eventsourcing.system.runner import SingleThreadedRunner
 
-from boxsystem import BoxSystem, User
+from boxsystem import BoxSystem, User, Negotiations
 
 
 class BoxSystemTests(TestCase):
+
+    def test_negotiation(self):
+        system = BoxSystem(
+            infrastructure_class=SQLAlchemyApplication,
+            setup_tables=True,
+        )
+
+        runner = SingleThreadedRunner(system)
+
+        runner.start()
+
+        negotiations: Negotiations = runner.processes['negotiations']
+
+        negotiation = negotiations.create_negotiation("a", "b", "c")
+        negotiation.__save__()
+
+        negotiation.create_offer()
+        negotiation.__save__()
+
+        self.assertEqual("created", negotiation.status)
+
+        copy = negotiations.get_negotiation(negotiation.id)
+
+        self.assertEqual("created", copy.status)
+
+        runner.close()
 
     def test_theSystem(self):
         system = BoxSystem(
