@@ -1,3 +1,4 @@
+import os
 from unittest import TestCase
 
 from eventsourcing.application.sqlalchemy import SQLAlchemyApplication
@@ -9,6 +10,7 @@ from boxsystem import BoxSystem, User, Negotiations
 class BoxSystemTests(TestCase):
 
     def test_negotiation(self):
+        os.environ["DB_URI"] = "sqlite:///db.sqlite"
         system = BoxSystem(
             infrastructure_class=SQLAlchemyApplication,
             setup_tables=True,
@@ -35,9 +37,11 @@ class BoxSystemTests(TestCase):
         runner.close()
 
     def test_theSystem(self):
+        os.environ["DB_URI"] = "sqlite:///db.sqlite"
         system = BoxSystem(
             infrastructure_class=SQLAlchemyApplication,
             setup_tables=True,
+            uri='sqlite:///a.db'
         )
 
         runner = SingleThreadedRunner(system)

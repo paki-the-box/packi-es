@@ -1,10 +1,15 @@
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
+from eventsourcing.application.decorators import applicationpolicy
 from eventsourcing.application.process import ProcessApplication
+from eventsourcing.application.sqlalchemy import SQLAlchemyApplication
 from eventsourcing.domain.model.aggregate import AggregateRoot
-from eventsourcing.domain.model.entity import TEntityWithHashchain
+from eventsourcing.infrastructure.sqlalchemy.records import Base
 from eventsourcing.system.definition import System
+from sqlalchemy import Column, Text
+from sqlalchemy.orm import Session
+from sqlalchemy_utils import UUIDType
 
 
 class User(AggregateRoot):
@@ -20,16 +25,6 @@ class User(AggregateRoot):
 
     class Created(Event, AggregateRoot.Created):
         pass
-
-    def start_shipping(self, receiver: UUID) -> UUID:
-        shipping_id = uuid4()
-        self.__trigger_event__(
-            self.ShippingStarted,
-            shipping_id=shipping_id,
-            sender=self.id,
-            receiver=receiver
-        )
-        return shipping_id
 
     class ShippingStarted(Event):
 
@@ -47,6 +42,16 @@ class User(AggregateRoot):
 
         def mutate(self, obj):
             obj.shippings.append(self.shipping_id)
+
+    def start_shipping(self, receiver: UUID) -> UUID:
+        shipping_id = uuid4()
+        self.__trigger_event__(
+            event_class=self.ShippingStarted,
+            shipping_id=shipping_id,
+            sender=self.id,
+            receiver=receiver
+        )
+        return shipping_id
 
     class ShippingOffered(Event):
         @property
@@ -168,7 +173,50 @@ class Users(ProcessApplication):
                                     sender=sender.id, receiver=receiver.id)
             sender.track_shipping(shipping_id=event.originator_id,
                                   sender=sender.id, receiver=receiver.id)
-            print(receiver)
+
+
+class UserIndex(Base):
+    __tablename__ = "user_index"
+
+    user_name = Column(Text(), primary_key=True)
+    email = Column(Text())
+    user_id = Column(UUIDType())
+
+
+class UsersIndex(SQLAlchemyApplication, ProcessApplication):
+    """
+    Reverse Index for the Users ProcessApplication
+    Roughly following the example from
+    https://eventsourcing.readthedocs.io/en/stable/topics/projections.html?highlight=index#reliable-projections
+    """
+    # This is just so we can __save__() AggregateRoot events.
+    persist_event_type = AggregateRoot.Event
+
+    def __init__(self, uri: Optional[str] = None, session: Optional[Any] = None, tracking_record_class: Any = None,
+                 **kwargs: Any):
+        super().__init__(uri, session, tracking_record_class, **kwargs)
+        self.datastore.setup_table(UserIndex)
+
+    @applicationpolicy
+    def policy(self, repository, event):
+        """Do nothing by default."""
+
+    @policy.register(User.Created)
+    def _(self, repository, event: User.Created):
+        print(f'Adding {event.name} to reverse Index!')
+        session: Session = self.datastore.session
+        if session.query(UserIndex).filter(UserIndex.user_name == event.name).count() > 0:
+            print("Warning, updating Index!")
+            record = session.query(UserIndex).filter(UserIndex.user_name == event.name).one()
+            record.user_id = event.originator_id
+        else:
+            record = UserIndex(user_name=event.name, email=event.email, user_id=event.originator_id)
+        repository.save_orm_obj(record)
+
+    def get_uuid_for_name(self, user_name):
+        session: Session = self.datastore.session
+
+        return session.query(UserIndex.user_id).filter(UserIndex.user_name == user_name).scalar()
 
 
 class Shippings(ProcessApplication):
@@ -198,6 +246,6 @@ class Negotiations(ProcessApplication):
 class BoxSystem(System):
     def __init__(self, **kwargs):
         super(BoxSystem, self).__init__(
-            Users | Shippings | Users | Users | Negotiations,
+            Users | Shippings | Users | Users | Negotiations | Users | UsersIndex,
             **kwargs
         )
