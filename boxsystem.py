@@ -185,27 +185,28 @@ class Users(SQLAlchemyApplication, ProcessApplication):
         assert isinstance(user, User)
         return user
 
-    @staticmethod
-    def policy(repository, event):
-        if isinstance(event, User.ShippingStarted):
-            receiver = repository[event.receiver]
-            assert isinstance(receiver, User)
-            receiver.track_shipping(
-                shipping_id=event.shipping_id,
-                sender=event.sender,
-                receiver=event.receiver
-            )
-        elif isinstance(event, Shipping.Created):
-            sender: User = repository[event.sender]
-            receiver: User = repository[event.receiver]
-            receiver.track_shipping(shipping_id=event.originator_id,
-                                    sender=sender.id, receiver=receiver.id)
-            sender.track_shipping(shipping_id=event.originator_id,
-                                  sender=sender.id, receiver=receiver.id)
-
     @applicationpolicy
     def policy(self, repository, event):
         """Do nothing by default."""
+
+    @policy.register(User.ShippingStarted)
+    def _(self, repository, event: User.ShippingStarted):
+        receiver = repository[event.receiver]
+        assert isinstance(receiver, User)
+        receiver.track_shipping(
+            shipping_id=event.shipping_id,
+            sender=event.sender,
+            receiver=event.receiver
+        )
+
+    @policy.register(User.ShippingOffered)
+    def _(self, repository, event: User.ShippingOffered):
+        sender: User = repository[event.sender]
+        receiver: User = repository[event.receiver]
+        receiver.track_shipping(shipping_id=event.originator_id,
+                                sender=sender.id, receiver=receiver.id)
+        sender.track_shipping(shipping_id=event.originator_id,
+                              sender=sender.id, receiver=receiver.id)
 
     @policy.register(User.Created)
     def _(self, repository, event: User.Created):

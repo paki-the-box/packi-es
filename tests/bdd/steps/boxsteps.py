@@ -101,6 +101,19 @@ def step_impl(context, sender_name, receiver_name):
     assert_that(context.user_id2, equal_to(shipping.receiver))
 
 
+@then("associated to both users")
+def step_impl(context):
+    users = context.runner.processes['users']
+
+    shipping_id = context.shipping_id
+
+    sender: User = users.repository[context.user_id1]
+    receiver: User = users.repository[context.user_id2]
+
+    assert_that(shipping_id, is_in(sender.shippings))
+    assert_that(shipping_id, is_in(receiver.shippings))
+
+
 @when('a user with name "{username}" is created')
 def step_impl(context, username):
     users = context.runner.processes['users']
