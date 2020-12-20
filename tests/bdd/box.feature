@@ -19,3 +19,6 @@ Feature: Request Box
 
     When a user with name "Username" is created
     Then another user with name "Username" throws UserAlreadyExistsException exception
+
+    When a user with email "Email" is created
+    Then another user with email "Email" throws EmailAlreadyExistsException exception

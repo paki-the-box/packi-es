@@ -1,7 +1,10 @@
+import uuid
+
 from behave import given, when, then, use_step_matcher
 from hamcrest import assert_that, equal_to, is_in, not_none, calling, raises
 
-from boxsystem import BoxSystem, Users, User, Shippings, Shipping, UserAlreadyExistsException
+from boxsystem import BoxSystem, Users, User, Shippings, Shipping, UserAlreadyExistsException, \
+    EmailAlreadyExistsException
 
 use_step_matcher("parse")
 
@@ -111,3 +114,18 @@ def step_impl(context, username):
     users = context.runner.processes['users']
 
     assert_that(calling(lambda: users.create_user(username, "")), raises(UserAlreadyExistsException))
+
+
+@when('a user with email "{email}" is created')
+def step_impl(context, email):
+    users = context.runner.processes['users']
+
+    user = users.create_user(str(uuid.uuid4()), email)
+    user.__save__()
+
+
+@then('another user with email "{email}" throws EmailAlreadyExistsException exception')
+def step_impl(context, email):
+    users = context.runner.processes['users']
+
+    assert_that(calling(lambda: users.create_user(str(uuid.uuid4()), email)), raises(EmailAlreadyExistsException))

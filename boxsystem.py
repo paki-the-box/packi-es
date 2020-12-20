@@ -156,7 +156,7 @@ class UserAlreadyExistsException(Exception):
     pass
 
 
-class EmailAlreadyExistsApplication(Exception):
+class EmailAlreadyExistsException(Exception):
     pass
 
 
@@ -172,7 +172,7 @@ class Users(SQLAlchemyApplication, ProcessApplication):
         if self.get_uuid_for_name(name) is not None:
             raise UserAlreadyExistsException
         if self.get_uuid_for_email(email) is not None:
-            raise EmailAlreadyExistsApplication
+            raise EmailAlreadyExistsException
         return User.__create__(name=name, email=email)
 
     def __init__(self, uri: Optional[str] = None, session: Optional[Any] = None, tracking_record_class: Any = None,
