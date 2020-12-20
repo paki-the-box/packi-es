@@ -156,6 +156,10 @@ class UserAlreadyExistsException(Exception):
     pass
 
 
+class EmailAlreadyExistsApplication(Exception):
+    pass
+
+
 class Users(SQLAlchemyApplication, ProcessApplication):
     """
     Reverse Index for the Users ProcessApplication
@@ -167,6 +171,8 @@ class Users(SQLAlchemyApplication, ProcessApplication):
     def create_user(self, name, email):
         if self.get_uuid_for_name(name) is not None:
             raise UserAlreadyExistsException
+        if self.get_uuid_for_email(email) is not None:
+            raise EmailAlreadyExistsApplication
         return User.__create__(name=name, email=email)
 
     def __init__(self, uri: Optional[str] = None, session: Optional[Any] = None, tracking_record_class: Any = None,
@@ -216,6 +222,11 @@ class Users(SQLAlchemyApplication, ProcessApplication):
         session: Session = self.datastore.session
 
         return session.query(UserIndex.user_id).filter(UserIndex.user_name == user_name).scalar()
+
+    def get_uuid_for_email(self, email):
+        session: Session = self.datastore.session
+
+        return session.query(UserIndex.user_id).filter(UserIndex.email == email).scalar()
 
 
 class Shippings(ProcessApplication):

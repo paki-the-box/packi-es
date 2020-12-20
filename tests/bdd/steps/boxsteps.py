@@ -1,7 +1,7 @@
 from behave import given, when, then, use_step_matcher
-from hamcrest import assert_that, equal_to, is_in, not_none
+from hamcrest import assert_that, equal_to, is_in, not_none, calling, raises
 
-from boxsystem import BoxSystem, Users, User, Shippings, Shipping
+from boxsystem import BoxSystem, Users, User, Shippings, Shipping, UserAlreadyExistsException
 
 use_step_matcher("parse")
 
@@ -96,3 +96,18 @@ def step_impl(context, sender_name, receiver_name):
     # Now we have our shipping
     assert_that(context.user_id1, equal_to(shipping.sender))
     assert_that(context.user_id2, equal_to(shipping.receiver))
+
+
+@when('a user with name "{username}" is created')
+def step_impl(context, username):
+    users = context.runner.processes['users']
+
+    user = users.create_user(username, "")
+    user.__save__()
+
+
+@then('another user with name "{username}" throws UserAlreadyExistsException exception')
+def step_impl(context, username):
+    users = context.runner.processes['users']
+
+    assert_that(calling(lambda: users.create_user(username, "")), raises(UserAlreadyExistsException))
