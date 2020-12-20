@@ -144,12 +144,35 @@ class Negotiation(AggregateRoot):
         return f'{self.author} -> {self.box} ({self.status}, {self.id})'
 
 
-class Users(ProcessApplication):
+class UserIndex(Base):
+    __tablename__ = "user_index"
+
+    user_name = Column(Text(), primary_key=True)
+    email = Column(Text())
+    user_id = Column(UUIDType())
+
+
+class UserAlreadyExistsException(Exception):
+    pass
+
+
+class Users(SQLAlchemyApplication, ProcessApplication):
+    """
+    Reverse Index for the Users ProcessApplication
+    Roughly following the example from
+    https://eventsourcing.readthedocs.io/en/stable/topics/projections.html?highlight=index#reliable-projections
+    """
     persist_event_type = User.Event
 
-    @staticmethod
-    def create_user(name, email):
+    def create_user(self, name, email):
+        if self.get_uuid_for_name(name) is not None:
+            raise UserAlreadyExistsException
         return User.__create__(name=name, email=email)
+
+    def __init__(self, uri: Optional[str] = None, session: Optional[Any] = None, tracking_record_class: Any = None,
+                 **kwargs: Any):
+        super().__init__(uri, session, tracking_record_class, **kwargs)
+        self.datastore.setup_table(UserIndex)
 
     def get_user(self, user_id):
         user = self.repository[user_id]
@@ -174,36 +197,12 @@ class Users(ProcessApplication):
             sender.track_shipping(shipping_id=event.originator_id,
                                   sender=sender.id, receiver=receiver.id)
 
-
-class UserIndex(Base):
-    __tablename__ = "user_index"
-
-    user_name = Column(Text(), primary_key=True)
-    email = Column(Text())
-    user_id = Column(UUIDType())
-
-
-class UsersIndex(SQLAlchemyApplication, ProcessApplication):
-    """
-    Reverse Index for the Users ProcessApplication
-    Roughly following the example from
-    https://eventsourcing.readthedocs.io/en/stable/topics/projections.html?highlight=index#reliable-projections
-    """
-    # This is just so we can __save__() AggregateRoot events.
-    persist_event_type = AggregateRoot.Event
-
-    def __init__(self, uri: Optional[str] = None, session: Optional[Any] = None, tracking_record_class: Any = None,
-                 **kwargs: Any):
-        super().__init__(uri, session, tracking_record_class, **kwargs)
-        self.datastore.setup_table(UserIndex)
-
     @applicationpolicy
     def policy(self, repository, event):
         """Do nothing by default."""
 
     @policy.register(User.Created)
     def _(self, repository, event: User.Created):
-        print(f'Adding {event.name} to reverse Index!')
         session: Session = self.datastore.session
         if session.query(UserIndex).filter(UserIndex.user_name == event.name).count() > 0:
             print("Warning, updating Index!")
@@ -246,6 +245,6 @@ class Negotiations(ProcessApplication):
 class BoxSystem(System):
     def __init__(self, **kwargs):
         super(BoxSystem, self).__init__(
-            Users | Shippings | Users | Users | Negotiations | Users | UsersIndex,
+            Users | Shippings | Users | Users | Negotiations,
             **kwargs
         )

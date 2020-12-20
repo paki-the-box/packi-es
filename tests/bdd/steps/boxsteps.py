@@ -1,7 +1,7 @@
 from behave import given, when, then, use_step_matcher
 from hamcrest import assert_that, equal_to, is_in, not_none
 
-from boxsystem import BoxSystem, Users, User, Shippings, Shipping, UsersIndex
+from boxsystem import BoxSystem, Users, User, Shippings, Shipping
 
 use_step_matcher("parse")
 
@@ -11,28 +11,12 @@ def step_impl(context):
     assert isinstance(context.system, BoxSystem)
 
     assert_that('users', is_in(context.runner.processes))
-    assert_that('usersindex', is_in(context.runner.processes))
     assert_that('shippings', is_in(context.runner.processes))
 
     # Register a user.
     users: Users = context.runner.processes['users']
     assert_that(users, isinstance(users, Users))
-    #
-    # Register for work.
-    user1 = users.create_user("User 1", "u1@b.de")
-    user2 = users.create_user("User 2", "u2@b.de")
-    assert isinstance(user1, User)
-    assert isinstance(user1, User)
-    user1.__save__()
-    user2.__save__()
-    context.user_id1 = user1.id
-    context.user_id2 = user2.id
 
-    # Check the users is registered.
-    assert_that(context.user_id1, is_in(users.repository))
-    assert_that(context.user_id2, is_in(users.repository))
-
-    #
     shippings = context.runner.processes['shippings']
     assert isinstance(shippings, Shippings)
 
@@ -54,10 +38,10 @@ def step_impl(context, user_name, email):
 
 @then("a reverse Index is created")
 def step_impl(context):
-    users_index: UsersIndex = context.runner.processes['usersindex']
+    users: Users = context.runner.processes['users']
     user_id = context.user_id
 
-    fetched_id = users_index.get_uuid_for_name(user_name=context.name)
+    fetched_id = users.get_uuid_for_name(user_name=context.name)
 
     assert_that(fetched_id, not_none())
     assert_that(user_id, equal_to(fetched_id))
@@ -66,12 +50,25 @@ def step_impl(context):
 @when('a user "{sender_name}" sends a package to "{receiver_name}"')
 def step_impl(context, sender_name, receiver_name):
     users = context.runner.processes['users']
-    users_index: UsersIndex = context.runner.processes['usersindex']
 
-    sender_id = users_index.get_uuid_for_name(sender_name)
+    # Register for work.
+    user1 = users.create_user("User 1", "u1@b.de")
+    user2 = users.create_user("User 2", "u2@b.de")
+    assert isinstance(user1, User)
+    assert isinstance(user1, User)
+    user1.__save__()
+    user2.__save__()
+    context.user_id1 = user1.id
+    context.user_id2 = user2.id
+
+    # Check the users is registered.
+    assert_that(context.user_id1, is_in(users.repository))
+    assert_that(context.user_id2, is_in(users.repository))
+
+    sender_id = users.get_uuid_for_name(sender_name)
     assert sender_id is not None
 
-    receiver_id = users_index.get_uuid_for_name(receiver_name)
+    receiver_id = users.get_uuid_for_name(receiver_name)
 
     sender = users.repository[sender_id]
     receiver = users.repository[receiver_id]
