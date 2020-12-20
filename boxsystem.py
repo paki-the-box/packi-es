@@ -185,9 +185,23 @@ class Users(SQLAlchemyApplication, ProcessApplication):
         assert isinstance(user, User)
         return user
 
+    def _get_orm_session(self) -> Session:
+        return self.datastore.session
+
     @applicationpolicy
     def policy(self, repository, event):
         """Do nothing by default."""
+
+    @policy.register(User.Created)
+    def _(self, repository, event: User.Created):
+        session: Session = self._get_orm_session()
+        if session.query(UserIndex).filter(UserIndex.user_name == event.name).count() > 0:
+            print("Warning, updating Index!")
+            record = session.query(UserIndex).filter(UserIndex.user_name == event.name).one()
+            record.user_id = event.originator_id
+        else:
+            record = UserIndex(user_name=event.name, email=event.email, user_id=event.originator_id)
+        repository.save_orm_obj(record)
 
     @policy.register(User.ShippingStarted)
     def _(self, repository, event: User.ShippingStarted):
@@ -208,24 +222,13 @@ class Users(SQLAlchemyApplication, ProcessApplication):
         sender.track_shipping(shipping_id=event.originator_id,
                               sender=sender.id, receiver=receiver.id)
 
-    @policy.register(User.Created)
-    def _(self, repository, event: User.Created):
-        session: Session = self.datastore.session
-        if session.query(UserIndex).filter(UserIndex.user_name == event.name).count() > 0:
-            print("Warning, updating Index!")
-            record = session.query(UserIndex).filter(UserIndex.user_name == event.name).one()
-            record.user_id = event.originator_id
-        else:
-            record = UserIndex(user_name=event.name, email=event.email, user_id=event.originator_id)
-        repository.save_orm_obj(record)
-
     def get_uuid_for_name(self, user_name):
-        session: Session = self.datastore.session
+        session: Session = self._get_orm_session()
 
         return session.query(UserIndex.user_id).filter(UserIndex.user_name == user_name).scalar()
 
     def get_uuid_for_email(self, email):
-        session: Session = self.datastore.session
+        session: Session = self._get_orm_session()
 
         return session.query(UserIndex.user_id).filter(UserIndex.email == email).scalar()
 
