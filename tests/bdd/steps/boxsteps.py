@@ -1,7 +1,7 @@
 import uuid
 
 from behave import given, when, then, use_step_matcher
-from hamcrest import assert_that, equal_to, is_in, not_none, calling, raises
+from hamcrest import assert_that, equal_to, is_in, not_none, calling, raises, has_length
 
 from boxsystem import BoxSystem, Users, User, Shippings, Shipping, UserAlreadyExistsException, \
     EmailAlreadyExistsException
@@ -142,3 +142,26 @@ def step_impl(context, email):
     users = context.runner.processes['users']
 
     assert_that(calling(lambda: users.create_user(str(uuid.uuid4()), email)), raises(EmailAlreadyExistsException))
+
+
+@then("Sender is in table")
+def step_impl(context):
+    shippings: Shippings = context.runner.processes['shippings']
+    shipping_id = context.shipping_id
+    sender = context.user_id1
+
+    sent = shippings.get_sent_by(sender)
+
+    assert_that(sent, has_length(1))
+    assert_that(shipping_id, is_in(sent))
+
+
+@then("Receiver is in table")
+def step_impl(context):
+    shippings: Shippings = context.runner.processes['shippings']
+    shipping_id = context.shipping_id
+
+    received = shippings.get_received_by(context.user_id2)
+
+    assert_that(received, has_length(1))
+    assert_that(shipping_id, is_in(received))

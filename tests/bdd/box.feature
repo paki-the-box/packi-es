@@ -13,6 +13,8 @@ Feature: Request Box
     When a user "User 1" sends a package to "User 2"
     Then a shipping from "User 1" to "User 2" is created
     And associated to both users
+    And Sender is in table
+    And Receiver is in table
 
   Scenario: Duplicate Users impossible
     Given box system is running

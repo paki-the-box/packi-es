@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Optional, List
 from uuid import UUID, uuid4
 
 from eventsourcing.application.decorators import applicationpolicy
@@ -233,15 +233,50 @@ class Users(SQLAlchemyApplication, ProcessApplication):
         return session.query(UserIndex.user_id).filter(UserIndex.email == email).scalar()
 
 
-class Shippings(ProcessApplication):
+class SendingsPerUser(Base):
+    __tablename__ = "send_shipments"
+
+    shipping_id = Column(UUIDType(), primary_key=True)
+    user_id = Column(UUIDType())
+
+
+class ReceivingsPerUser(Base):
+    __tablename__ = "received_shipments"
+
+    shipping_id = Column(UUIDType(), primary_key=True)
+    user_id = Column(UUIDType())
+
+
+class Shippings(SQLAlchemyApplication, ProcessApplication):
     persist_event_type = Shipping.Event
 
-    @staticmethod
-    def policy(repository, event):
-        if isinstance(event, User.ShippingStarted):
-            shipping = Shipping.__create__(originator_id=event.shipping_id, sender=event.sender,
-                                           receiver=event.receiver)
-            return shipping
+    def __init__(self, uri: Optional[str] = None, session: Optional[Any] = None, tracking_record_class: Any = None,
+                 **kwargs: Any):
+        super().__init__(uri, session, tracking_record_class, **kwargs)
+        self.datastore.setup_table(SendingsPerUser)
+        self.datastore.setup_table(ReceivingsPerUser)
+
+    def _get_orm_session(self) -> Session:
+        return self.datastore.session
+
+    @applicationpolicy
+    def policy(self, repository, event):
+        """Do nothing by default."""
+
+    @policy.register(User.ShippingStarted)
+    def _(self, repository, event: User.ShippingStarted):
+        shipping = Shipping.__create__(originator_id=event.shipping_id, sender=event.sender,
+                                       receiver=event.receiver)
+        # Also store both tables
+        repository.save_orm_obj(SendingsPerUser(shipping_id=shipping.id, user_id=event.sender))
+        repository.save_orm_obj(ReceivingsPerUser(shipping_id=shipping.id, user_id=event.receiver))
+        return shipping
+
+    def get_sent_by(self, user_id) -> List[UUID]:
+        return list(map(lambda tuple: tuple[0], self._get_orm_session().query(SendingsPerUser.shipping_id).filter(SendingsPerUser.user_id==user_id).all()))
+
+    def get_received_by(self, user_id) -> List[UUID]:
+        return list(map(lambda tuple: tuple[0], self._get_orm_session().query(ReceivingsPerUser.shipping_id).filter(ReceivingsPerUser.user_id==user_id).all()))
 
 
 class Negotiations(ProcessApplication):
