@@ -15,7 +15,7 @@ Feature: Request Box
     Then a shipping from "User 1" to "User 2" is created
 
   Scenario: Duplicate Users impossible
-  Given box system is running
+    Given box system is running
 
     When a user with name "Username" is created
     Then another user with name "Username" throws UserAlreadyExistsException exception
