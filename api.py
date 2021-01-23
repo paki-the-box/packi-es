@@ -3,7 +3,7 @@ import os
 import random
 from datetime import date
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
@@ -32,7 +32,7 @@ app.add_middleware(
 )
 
 class Contact(BaseModel):
-    id: uuid.UUID
+    id: Optional[uuid.UUID]
     email: EmailStr
     name: str
 
@@ -54,6 +54,17 @@ class SendRequest(BaseModel):
     #size: ShipmentSizes
     #dropoff_date: date
 
+def getRunner():
+    os.environ["DB_URI"] = "sqlite:///db.sqlite"
+    system = BoxSystem(
+        infrastructure_class=SQLAlchemyApplication,
+        setup_tables=True,
+        uri='sqlite:///a.db'
+    )
+    runner = SingleThreadedRunner(system)
+    runner.start()
+    return runner
+
 @app.post("/requests/new")
 async def new_request(send_request: SendRequest):
     """
@@ -63,19 +74,9 @@ async def new_request(send_request: SendRequest):
     """
     print(f'got send request: {send_request}')
 
-    os.environ["DB_URI"] = "sqlite:///db.sqlite"
-    system = BoxSystem(
-        infrastructure_class=SQLAlchemyApplication,
-        setup_tables=True,
-        uri='sqlite:///a.db'
-    )
-
-    runner = SingleThreadedRunner(system)
-
-    runner.start()
+    runner = getRunner()
 
     users = runner.processes['users']
-    shippings = runner.processes['shippings']
 
     sender: User = users.get_user(send_request.sender)
     receiver: User = users.get_user(send_request.receiver)
@@ -98,41 +99,25 @@ async def get_open_requests(user_id: uuid.UUID):
     :param user_id:
     :return:
     """
-    os.environ["DB_URI"] = "sqlite:///db.sqlite"
-    system = BoxSystem(
-        infrastructure_class=SQLAlchemyApplication,
-        setup_tables=True,
-        uri='sqlite:///a.db'
-    )
-
-    runner = SingleThreadedRunner(system)
-
-    runner.start()
+    runner = getRunner()
 
     users = runner.processes['users']
-    shippings = runner.processes['shippings']
-
     user: User = users.get_user(user_id)
     
     runner.close()
     return user.shippings
 
-@app.get("/debug/user")
-def new_debug_user(response_model=Contact):
-    os.environ["DB_URI"] = "sqlite:///db.sqlite"
-    system = BoxSystem(
-        infrastructure_class=SQLAlchemyApplication,
-        setup_tables=True,
-        uri='sqlite:///a.db'
-    )
-
-    runner = SingleThreadedRunner(system)
-
-    runner.start()
+@app.post("/user")
+def new_debug_user(user_request: Contact):
+    """
+    Create a new user
+    :return:
+    """
+    runner = getRunner()
 
     users = runner.processes['users']
 
-    user: User = users.create_user("User" + str(random.randint(0,100)), str(random.randint(0,100)) + "@b.c")
+    user: User = users.create_user(user_request.name, user_request.email)
 
     user.__save__()
 

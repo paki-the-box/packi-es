@@ -6,10 +6,16 @@ This Example is based on https://github.com/johnbywater/es-example-taxi-demo
 
 ## Install dependencies
 
-```
+```bash
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt 
+```
+
+## Starting the API server
+
+```
+uvicorn api:app --reload
 ```
 
 # How to generate openapi clients (e.g. angular)
